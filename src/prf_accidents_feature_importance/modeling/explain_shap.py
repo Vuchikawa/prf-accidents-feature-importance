@@ -51,6 +51,10 @@ def carregar_teste(caminho: Path) -> tuple[pd.DataFrame, pd.Series]:
         random_state=SEMENTE,
         stratify=y_temporario,
     )
+    colunas_numericas = ["km", "icm", "volume_pedagio", "fator_humano"]
+    print(x_teste[colunas_numericas].dtypes)
+    print(x_teste[colunas_numericas].isna().sum())
+    print(x_teste[colunas_numericas].isna().mean())
     return x_teste, y_teste
 
 
@@ -115,25 +119,43 @@ def calcular_shap(
         diretorio_saida / "shap_values.parquet", index=False
     )
 
+    mask_plot = (
+        x_teste["icm"].notna()
+        & x_teste["volume_pedagio"].notna()
+    )
+    x_plot = x_teste.loc[mask_plot].copy()
+    valores_plot = valores[mask_plot.to_numpy()]
+    if x_plot.empty:
+        raise ValueError(
+            "Nenhuma observação disponível para os plots SHAP após o filtro."
+        )
+    nota_plot = (
+        f"Visualização baseada em N = {len(x_plot):,} observações. "
+        "Excluídas observações com icm ou volume_pedagio ausentes "
+        "somente para os plots."
+    )
+
     # Summary plot global agregado por classe.
     shap.summary_plot(
-        np.abs(valores).mean(axis=2),
-        x_teste,
+        np.abs(valores_plot).mean(axis=2),
+        x_plot,
         show=False,
     )
-    plt.tight_layout()
+    plt.tight_layout(rect=(0, 0.08, 1, 1))
+    plt.figtext(0.5, 0.01, nota_plot, ha="center", fontsize=8)
     plt.savefig(diretorio_saida / "shap_summary_global.png", dpi=200, bbox_inches="tight")
     plt.close()
 
     # Um summary plot para cada classe, permitindo discutir direção dos efeitos.
     for indice_classe, classe in enumerate(classes):
         shap.summary_plot(
-            valores[:, :, indice_classe],
-            x_teste,
+            valores_plot[:, :, indice_classe],
+            x_plot,
             show=False,
         )
         plt.title(f"SHAP Summary — {classe}")
-        plt.tight_layout()
+        plt.tight_layout(rect=(0, 0.08, 1, 1))
+        plt.figtext(0.5, 0.01, nota_plot, ha="center", fontsize=8)
         nome = str(classe).replace(" ", "_")
         plt.savefig(
             diretorio_saida / f"shap_summary_{nome}.png",
